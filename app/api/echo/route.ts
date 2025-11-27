@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       { error: 'Internal Server Error' },
       { status: 500 }
     );
-    recordRequest({
+    await recordRequest({
       method: 'GET',
       status: 500,
       success: false,
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  recordRequest({
+  await recordRequest({
     method: 'GET',
     status: 200,
     success: true,
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       { error: 'Internal Server Error' },
       { status: 500 }
     );
-    recordRequest({
+    await recordRequest({
       method: 'POST',
       status: 500,
       success: false,
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  recordRequest({
+  await recordRequest({
     method: 'POST',
     status: 200,
     success: true,
