@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getConfig, updateConfig } from '@/lib/config';
+import { getNamespaceFromRequest } from '@/lib/namespace';
 
-export async function GET() {
-  const config = getConfig();
+export async function GET(request: NextRequest) {
+  const namespace = getNamespaceFromRequest(request);
+  const config = await getConfig(namespace);
   return NextResponse.json(config);
 }
 
@@ -26,7 +28,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const updatedConfig = updateConfig({ delay, failureRate });
+    const namespace = getNamespaceFromRequest(request);
+    const updatedConfig = await updateConfig(namespace, { delay, failureRate });
     return NextResponse.json(updatedConfig);
   } catch (error) {
     return NextResponse.json(

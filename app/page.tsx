@@ -342,7 +342,7 @@ curl -X POST http://localhost:3000/api/config \
           <div className="metrics-card__header">
             <div>
               <p className="eyebrow">Traffic Monitor</p>
-              <h2>最近 5 分钟请求走势</h2>
+              <h2>最近 10 分钟请求走势</h2>
               {metricsLoading && <span className="metrics-hint">刷新中...</span>}
             </div>
             <button

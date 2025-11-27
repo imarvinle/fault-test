@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getConfig } from '@/lib/config';
 import { recordRequest } from '@/lib/requestLog';
+import { getNamespaceFromRequest } from '@/lib/namespace';
 
 function getPath(request: NextRequest) {
   const search = request.nextUrl.search;
@@ -13,7 +14,8 @@ async function applyDelay(ms: number) {
 }
 
 export async function GET(request: NextRequest) {
-  const config = getConfig();
+  const namespace = getNamespaceFromRequest(request);
+  const config = await getConfig(namespace);
   const start = Date.now();
 
   await applyDelay(config.delay);
@@ -24,7 +26,7 @@ export async function GET(request: NextRequest) {
       { error: 'Internal Server Error' },
       { status: 500 }
     );
-    await recordRequest({
+    await recordRequest(namespace, {
       method: 'GET',
       status: 500,
       success: false,
@@ -50,7 +52,7 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  await recordRequest({
+  await recordRequest(namespace, {
     method: 'GET',
     status: 200,
     success: true,
@@ -62,7 +64,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const config = getConfig();
+  const namespace = getNamespaceFromRequest(request);
+  const config = await getConfig(namespace);
   const start = Date.now();
 
   await applyDelay(config.delay);
@@ -73,7 +76,7 @@ export async function POST(request: NextRequest) {
       { error: 'Internal Server Error' },
       { status: 500 }
     );
-    await recordRequest({
+    await recordRequest(namespace, {
       method: 'POST',
       status: 500,
       success: false,
@@ -100,7 +103,7 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  await recordRequest({
+  await recordRequest(namespace, {
     method: 'POST',
     status: 200,
     success: true,
