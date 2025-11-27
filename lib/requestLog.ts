@@ -109,13 +109,14 @@ export async function getRequestMetrics(limit = 50): Promise<RequestMetricsPaylo
   const bucketPromises = Array.from({ length: SERIES_BUCKETS }, (_, idx) => {
     const bucketStart = fiveMinuteThreshold + idx * bucketSize;
     const bucketKey = `${BUCKET_PREFIX}${bucketStart}`;
-    return redis
-      .hmget<[string | null, string | null]>(bucketKey, 'total', 'failures')
-      .then((result: [string | null, string | null] | null) => ({
+    return redis.hmget(bucketKey, 'total', 'failures').then((result) => {
+      const record = (result ?? {}) as Record<string, string | null>;
+      return {
         bucketStart,
-        total: Number(result?.[0] ?? 0),
-        failures: Number(result?.[1] ?? 0),
-      }));
+        total: Number(record.total ?? 0),
+        failures: Number(record.failures ?? 0),
+      };
+    });
   });
 
   const series = await Promise.all(bucketPromises);
@@ -143,19 +144,15 @@ export async function getRequestMetrics(limit = 50): Promise<RequestMetricsPaylo
 export async function resetRequestMetrics() {
   await redis.del(RECENT_LOGS_KEY, TOTAL_REQUESTS_KEY);
 
-  const keysToDelete: string[] = [];
-  for await (const key of redis.scanIterator({ match: `${BUCKET_PREFIX}*`, count: 100 })) {
-    if (typeof key === 'string') {
-      keysToDelete.push(key);
-      if (keysToDelete.length >= 50) {
-        await redis.del(...keysToDelete);
-        keysToDelete.length = 0;
-      }
-    }
-  }
+  let cursor = 0;
+  const match = `${BUCKET_PREFIX}*`;
 
-  if (keysToDelete.length) {
-    await redis.del(...keysToDelete);
-  }
+  do {
+    const [nextCursor, keys] = await redis.scan(cursor, { match, count: 100 });
+    cursor = Number(nextCursor);
+    if (keys.length) {
+      await redis.del(...keys);
+    }
+  } while (cursor !== 0);
 }
 
