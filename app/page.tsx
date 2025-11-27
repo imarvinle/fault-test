@@ -208,12 +208,8 @@ export default function Home() {
   );
 
   const chartSeries = metrics?.series ?? [];
-  const totalPath = useMemo(
-    () => buildPath(chartSeries, 'total', CHART_WIDTH, CHART_HEIGHT),
-    [chartSeries]
-  );
-  const failurePath = useMemo(
-    () => buildPath(chartSeries, 'failures', CHART_WIDTH, CHART_HEIGHT),
+  const { totalPath, failurePath, yTicks } = useMemo(
+    () => buildPaths(chartSeries, CHART_WIDTH, CHART_HEIGHT),
     [chartSeries]
   );
 
@@ -383,25 +379,50 @@ curl -X POST http://localhost:3000/api/config \
               <span className="legend-dot legend-dot--fail" />
               <span>失败量</span>
             </div>
-            <svg
-              viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-              preserveAspectRatio="none"
-              className="chart"
-            >
-              <line
-                className="chart__baseline"
-                x1={0}
-                y1={CHART_HEIGHT - 1}
-                x2={CHART_WIDTH}
-                y2={CHART_HEIGHT - 1}
-              />
-              {totalPath && (
-                <path className="chart__line chart__line--total" d={totalPath} />
-              )}
-              {failurePath && (
-                <path className="chart__line chart__line--fail" d={failurePath} />
-              )}
-            </svg>
+            <div className="chart-container">
+              <div className="chart-y-axis">
+                {yTicks.map((tick) => (
+                  <div key={tick.value} className="chart-y-axis__label">
+                    <span>{tick.label}</span>
+                    <div
+                      className="chart-y-axis__line"
+                      style={{ top: `${tick.position}%` }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="chart-wrapper">
+                <svg
+                  viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+                  preserveAspectRatio="none"
+                  className="chart"
+                >
+                  <line
+                    className="chart__baseline"
+                    x1={0}
+                    y1={CHART_HEIGHT - 1}
+                    x2={CHART_WIDTH}
+                    y2={CHART_HEIGHT - 1}
+                  />
+                  {totalPath && (
+                    <path className="chart__line chart__line--total" d={totalPath} />
+                  )}
+                  {failurePath && (
+                    <path className="chart__line chart__line--fail" d={failurePath} />
+                  )}
+                </svg>
+                <div className="chart-x-axis">
+                  {chartSeries.map((point) => (
+                    <div key={point.bucketStart}>
+                      {new Date(point.bucketStart).toLocaleTimeString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
             <p className="helper-text">
               采样窗口：最近 5 分钟，按时间切片展示请求与失败数
             </p>
@@ -493,24 +514,44 @@ curl -X POST http://localhost:3000/api/config \
   );
 }
 
-function buildPath(
+function buildPaths(
   data: MetricsSeriesPoint[],
-  key: 'total' | 'failures',
   width: number,
   height: number
 ) {
-  if (data.length === 0) return '';
-  const maxValue = Math.max(...data.map((point) => point[key]), 1);
+  if (data.length === 0) {
+    return { totalPath: '', failurePath: '', yTicks: [] as Array<{ value: number; label: string; position: number }> };
+  }
+
+  const maxTotal = Math.max(...data.map((point) => point.total));
+  const maxFailures = Math.max(...data.map((point) => point.failures));
+  const maxValue = Math.max(maxTotal, maxFailures, 1);
   const step = data.length > 1 ? width / (data.length - 1) : width;
 
-  return data
-    .map((point, index) => {
-      const x = index * step;
-      const scaledY = height - (point[key] / maxValue) * (height - 10);
-      const y = Number.isFinite(scaledY) ? scaledY : height;
-      return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(' ');
+  const createPath = (key: 'total' | 'failures') =>
+    data
+      .map((point, index) => {
+        const x = index * step;
+        const scaledY = height - (point[key] / maxValue) * (height - 10);
+        const y = Number.isFinite(scaledY) ? scaledY : height;
+        return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(' ');
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+    const value = Math.round(maxValue * ratio);
+    return {
+      value,
+      label: value.toString(),
+      position: ratio * 100,
+    };
+  });
+
+  return {
+    totalPath: createPath('total'),
+    failurePath: createPath('failures'),
+    yTicks,
+  };
 }
 
 function formatRelativeTime(timestamp: number) {
