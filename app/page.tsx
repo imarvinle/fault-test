@@ -1,0 +1,265 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+
+interface Config {
+  delay: number;
+  failureRate: number;
+}
+
+export default function Home() {
+  const [config, setConfig] = useState<Config>({ delay: 0, failureRate: 0 });
+  const [delayInput, setDelayInput] = useState<string>('0');
+  const [failureRateInput, setFailureRateInput] = useState<string>('0');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  const loadConfig = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/config');
+      const data = await response.json();
+      setConfig(data);
+      setDelayInput(data.delay.toString());
+      setFailureRateInput(data.failureRate.toString());
+    } catch (error) {
+      console.error('Failed to load config:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveConfig = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch('/api/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setConfig(data);
+        setDelayInput(data.delay.toString());
+        setFailureRateInput(data.failureRate.toString());
+        alert('配置已保存！');
+      } else {
+        const error = await response.json();
+        alert(`保存失败: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      alert('保存失败，请重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testEcho = async () => {
+    setTestResult('测试中...');
+    const startTime = Date.now();
+    try {
+      const response = await fetch('/api/echo?test=1&message=hello');
+      const endTime = Date.now();
+      const data = await response.json();
+
+      if (response.ok) {
+        setTestResult(
+          `✅ 成功 (${endTime - startTime}ms)\n${JSON.stringify(data, null, 2)}`
+        );
+      } else {
+        setTestResult(
+          `❌ 失败 (${endTime - startTime}ms)\n状态码: ${response.status}\n${JSON.stringify(data, null, 2)}`
+        );
+      }
+    } catch (error) {
+      setTestResult(`❌ 请求失败: ${error}`);
+    }
+  };
+
+  const handleDelayChange = (value: string) => {
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setDelayInput(value);
+      const numValue = value === '' ? 0 : parseFloat(value);
+      if (!isNaN(numValue)) {
+        setConfig({ ...config, delay: numValue });
+      }
+    }
+  };
+
+  const handleFailureRateChange = (value: string) => {
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setFailureRateInput(value);
+      const numValue = value === '' ? 0 : parseFloat(value);
+      if (!isNaN(numValue)) {
+        const clampedValue = Math.min(100, Math.max(0, numValue));
+        setConfig({ ...config, failureRate: clampedValue });
+      }
+    }
+  };
+
+  const handleDelayBlur = () => {
+    setDelayInput(config.delay.toString());
+  };
+
+  const handleFailureRateBlur = () => {
+    setFailureRateInput(config.failureRate.toString());
+  };
+
+  const configSummary = useMemo(
+    () => [
+      { label: '当前延迟', value: `${config.delay}ms` },
+      { label: '失败率', value: `${config.failureRate}%` },
+    ],
+    [config.delay, config.failureRate]
+  );
+
+  return (
+    <main className="page">
+      <div className="page__container">
+        <section className="card hero-card">
+          <div className="hero-card__content">
+            <p className="eyebrow">Fault Injection Playground</p>
+            <h1>Echo API 管理面板</h1>
+            <p>
+              快速调节回声接口的延迟与失败率，模拟真实世界的网络抖动与异常，为压测、
+              灾备及回归验证提供更直观的可视化控制。
+            </p>
+
+            <div className="hero-card__metrics">
+              {configSummary.map((item) => (
+                <div className="metric" key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+
+            <div className="hero-card__actions">
+              <button
+                className="btn btn--primary"
+                onClick={saveConfig}
+                disabled={saving || loading}
+              >
+                {saving ? '保存中...' : '保存配置'}
+              </button>
+              <button
+                className="btn btn--ghost"
+                onClick={loadConfig}
+                disabled={loading}
+              >
+                {loading ? '加载中...' : '重新加载'}
+              </button>
+              <button className="btn btn--success" onClick={testEcho}>
+                测试 Echo API
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid">
+          <div className="card form-card">
+            <h2>响应策略</h2>
+            <p className="helper-text">
+              所有设置即时生效，可用于验证客户端在不同延迟和错误概率下的表现。
+            </p>
+
+            <div className="field-group">
+              <div className="field-group__header">
+                <label htmlFor="delay-input">延迟时间（毫秒）</label>
+                <span className="field-group__value">实时值：{config.delay}ms</span>
+              </div>
+              <input
+                id="delay-input"
+                className="field-input"
+                type="text"
+                inputMode="numeric"
+                value={delayInput}
+                onChange={(e) => handleDelayChange(e.target.value)}
+                onBlur={handleDelayBlur}
+                onFocus={(e) => e.target.select()}
+              />
+              <p className="helper-text">设置 API 响应延迟，0 表示立即返回。</p>
+            </div>
+
+            <div className="field-group">
+              <div className="field-group__header">
+                <label htmlFor="failure-input">失败率（%）</label>
+                <span className="field-group__value">
+                  实时值：{config.failureRate}%
+                </span>
+              </div>
+              <input
+                id="failure-input"
+                className="field-input"
+                type="text"
+                inputMode="numeric"
+                value={failureRateInput}
+                onChange={(e) => handleFailureRateChange(e.target.value)}
+                onBlur={handleFailureRateBlur}
+                onFocus={(e) => e.target.select()}
+                maxLength={6}
+              />
+              <p className="helper-text">
+                设置随机返回 500 的概率，支持 0 - 100 之间的小数。
+              </p>
+            </div>
+          </div>
+
+          <div className="card info-card">
+            <h2>API 使用说明</h2>
+            <ul>
+              <li>
+                <strong>GET /api/echo</strong> — 回声 GET 请求
+              </li>
+              <li>
+                <strong>POST /api/echo</strong> — 回声 POST 请求
+              </li>
+              <li>
+                <strong>GET /api/config</strong> — 获取当前配置
+              </li>
+              <li>
+                <strong>POST /api/config</strong> — 更新延迟和失败率
+              </li>
+            </ul>
+            <div>
+              <p className="helper-text">快速测试</p>
+              <pre className="code-block">
+{`curl http://localhost:3000/api/echo?test=1&message=hello
+
+curl -X POST http://localhost:3000/api/config \
+  -H "Content-Type: application/json" \
+  -d '{"delay":1200,"failureRate":18}'`}
+              </pre>
+            </div>
+          </div>
+        </section>
+
+        {testResult && (
+          <section className="card test-card">
+            <div className="test-card__header">
+              <h2>测试结果</h2>
+              <span className="status-pill">
+                {testResult.startsWith('✅')
+                  ? '已完成'
+                  : testResult.startsWith('测试中')
+                  ? '运行中'
+                  : '失败'}
+              </span>
+            </div>
+            <pre className="test-card__output">{testResult}</pre>
+          </section>
+        )}
+      </div>
+    </main>
+  );
+}
+
