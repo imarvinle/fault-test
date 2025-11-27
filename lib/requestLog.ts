@@ -106,17 +106,18 @@ export async function getRequestMetrics(limit = 50): Promise<RequestMetricsPaylo
     }
   }
 
-  const bucketPromises = Array.from({ length: SERIES_BUCKETS }, (_, idx) => {
+  const bucketPromises = Array.from({ length: SERIES_BUCKETS }, async (_, idx) => {
     const bucketStart = fiveMinuteThreshold + idx * bucketSize;
     const bucketKey = `${BUCKET_PREFIX}${bucketStart}`;
-    return redis.hmget(bucketKey, 'total', 'failures').then((result) => {
-      const record = (result ?? {}) as Record<string, string | null>;
-      return {
-        bucketStart,
-        total: Number(record.total ?? 0),
-        failures: Number(record.failures ?? 0),
-      };
-    });
+    const result = (await redis.hmget(bucketKey, 'total', 'failures')) as
+      | (string | null)[]
+      | null;
+    const [totalRaw, failuresRaw] = result ?? [];
+    return {
+      bucketStart,
+      total: Number(totalRaw ?? 0),
+      failures: Number(failuresRaw ?? 0),
+    };
   });
 
   const series = await Promise.all(bucketPromises);
