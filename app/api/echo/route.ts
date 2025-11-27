@@ -1,31 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getConfig } from '@/lib/config';
+import { recordRequest } from '@/lib/requestLog';
+
+function getPath(request: NextRequest) {
+  const search = request.nextUrl.search;
+  return `${request.nextUrl.pathname}${search}`;
+}
+
+async function applyDelay(ms: number) {
+  if (ms <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export async function GET(request: NextRequest) {
   const config = getConfig();
+  const start = Date.now();
 
-  // 应用延迟
-  if (config.delay > 0) {
-    await new Promise(resolve => setTimeout(resolve, config.delay));
-  }
+  await applyDelay(config.delay);
 
-  // 根据失败率决定是否返回错误
   const shouldFail = Math.random() * 100 < config.failureRate;
   if (shouldFail) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 }
     );
+    recordRequest({
+      method: 'GET',
+      status: 500,
+      success: false,
+      latency: Date.now() - start,
+      path: getPath(request),
+    });
+    return response;
   }
 
-  // 获取查询参数并返回
   const searchParams = request.nextUrl.searchParams;
   const params: Record<string, string> = {};
   searchParams.forEach((value, key) => {
     params[key] = value;
   });
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     message: 'Echo response',
     timestamp: new Date().toISOString(),
     queryParams: params,
@@ -34,26 +49,40 @@ export async function GET(request: NextRequest) {
       failureRate: config.failureRate,
     },
   });
+
+  recordRequest({
+    method: 'GET',
+    status: 200,
+    success: true,
+    latency: Date.now() - start,
+    path: getPath(request),
+  });
+
+  return response;
 }
 
 export async function POST(request: NextRequest) {
   const config = getConfig();
+  const start = Date.now();
 
-  // 应用延迟
-  if (config.delay > 0) {
-    await new Promise(resolve => setTimeout(resolve, config.delay));
-  }
+  await applyDelay(config.delay);
 
-  // 根据失败率决定是否返回错误
   const shouldFail = Math.random() * 100 < config.failureRate;
   if (shouldFail) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 }
     );
+    recordRequest({
+      method: 'POST',
+      status: 500,
+      success: false,
+      latency: Date.now() - start,
+      path: getPath(request),
+    });
+    return response;
   }
 
-  // 获取请求体
   let body;
   try {
     body = await request.json();
@@ -61,7 +90,7 @@ export async function POST(request: NextRequest) {
     body = null;
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     message: 'Echo response',
     timestamp: new Date().toISOString(),
     body: body,
@@ -70,5 +99,15 @@ export async function POST(request: NextRequest) {
       failureRate: config.failureRate,
     },
   });
+
+  recordRequest({
+    method: 'POST',
+    status: 200,
+    success: true,
+    latency: Date.now() - start,
+    path: getPath(request),
+  });
+
+  return response;
 }
 

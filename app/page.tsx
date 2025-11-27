@@ -7,6 +7,39 @@ interface Config {
   failureRate: number;
 }
 
+interface MetricsStats {
+  totalRequests: number;
+  lastMinuteRequests: number;
+  lastMinuteFailures: number;
+  lastMinuteFailureRate: number;
+  averageLatencyMs: number;
+}
+
+interface RequestLogEntry {
+  id: number;
+  method: string;
+  status: number;
+  success: boolean;
+  latency: number;
+  timestamp: number;
+  path: string;
+}
+
+interface MetricsSeriesPoint {
+  bucketStart: number;
+  total: number;
+  failures: number;
+}
+
+interface MetricsPayload {
+  stats: MetricsStats;
+  recentRequests: RequestLogEntry[];
+  series: MetricsSeriesPoint[];
+}
+
+const CHART_WIDTH = 600;
+const CHART_HEIGHT = 140;
+
 export default function Home() {
   const [config, setConfig] = useState<Config>({ delay: 0, failureRate: 0 });
   const [delayInput, setDelayInput] = useState<string>('0');
@@ -14,9 +47,34 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<MetricsPayload | null>(null);
 
   useEffect(() => {
     loadConfig();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadMetrics = async () => {
+      try {
+        const response = await fetch('/api/metrics');
+        const data = await response.json();
+        if (active) {
+          setMetrics(data);
+        }
+      } catch (error) {
+        console.error('Failed to load metrics:', error);
+      }
+    };
+
+    loadMetrics();
+    const interval = setInterval(loadMetrics, 4000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const loadConfig = async () => {
@@ -114,12 +172,30 @@ export default function Home() {
     setFailureRateInput(config.failureRate.toString());
   };
 
-  const configSummary = useMemo(
+  const heroMetrics = useMemo(
     () => [
       { label: '当前延迟', value: `${config.delay}ms` },
-      { label: '失败率', value: `${config.failureRate}%` },
+      { label: '配置失败率', value: `${config.failureRate}%` },
+      {
+        label: '1 分钟请求量',
+        value: metrics ? metrics.stats.lastMinuteRequests.toString() : '—',
+      },
+      {
+        label: '1 分钟失败量',
+        value: metrics ? metrics.stats.lastMinuteFailures.toString() : '—',
+      },
     ],
-    [config.delay, config.failureRate]
+    [config.delay, config.failureRate, metrics]
+  );
+
+  const chartSeries = metrics?.series ?? [];
+  const totalPath = useMemo(
+    () => buildPath(chartSeries, 'total', CHART_WIDTH, CHART_HEIGHT),
+    [chartSeries]
+  );
+  const failurePath = useMemo(
+    () => buildPath(chartSeries, 'failures', CHART_WIDTH, CHART_HEIGHT),
+    [chartSeries]
   );
 
   return (
@@ -135,7 +211,7 @@ export default function Home() {
             </p>
 
             <div className="hero-card__metrics">
-              {configSummary.map((item) => (
+              {heroMetrics.map((item) => (
                 <div className="metric" key={item.label}>
                   <span>{item.label}</span>
                   <strong>{item.value}</strong>
@@ -243,6 +319,135 @@ curl -X POST http://localhost:3000/api/config \
           </div>
         </section>
 
+        <section className="card metrics-card">
+          <div className="metrics-card__header">
+            <div>
+              <p className="eyebrow">Traffic Monitor</p>
+              <h2>最近 5 分钟请求走势</h2>
+            </div>
+            <div className="metrics-grid">
+              <div className="stat-tile">
+                <span>1 分钟请求量</span>
+                <strong>{metrics?.stats.lastMinuteRequests ?? '—'}</strong>
+              </div>
+              <div className="stat-tile">
+                <span>1 分钟失败量</span>
+                <strong>{metrics?.stats.lastMinuteFailures ?? '—'}</strong>
+              </div>
+              <div className="stat-tile">
+                <span>失败率</span>
+                <strong>
+                  {metrics
+                    ? `${metrics.stats.lastMinuteFailureRate.toFixed(1)}%`
+                    : '—'}
+                </strong>
+              </div>
+              <div className="stat-tile">
+                <span>平均耗时</span>
+                <strong>
+                  {metrics ? `${Math.round(metrics.stats.averageLatencyMs)}ms` : '—'}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="traffic-chart">
+            <div className="chart__legend">
+              <span className="legend-dot legend-dot--total" />
+              <span>请求量</span>
+              <span className="legend-dot legend-dot--fail" />
+              <span>失败量</span>
+            </div>
+            <svg
+              viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+              preserveAspectRatio="none"
+              className="chart"
+            >
+              <line
+                className="chart__baseline"
+                x1={0}
+                y1={CHART_HEIGHT - 1}
+                x2={CHART_WIDTH}
+                y2={CHART_HEIGHT - 1}
+              />
+              {totalPath && (
+                <path className="chart__line chart__line--total" d={totalPath} />
+              )}
+              {failurePath && (
+                <path className="chart__line chart__line--fail" d={failurePath} />
+              )}
+            </svg>
+            <p className="helper-text">
+              采样窗口：最近 5 分钟，按时间切片展示请求与失败数
+            </p>
+          </div>
+
+          <div className="request-table">
+            <div className="request-table__header">
+              <h3>最近请求</h3>
+              <span>
+                {metrics
+                  ? `最新 ${metrics.recentRequests.length} 条记录`
+                  : '暂无数据'}
+              </span>
+            </div>
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>方法</th>
+                    <th>状态</th>
+                    <th>耗时</th>
+                    <th>路径</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics && metrics.recentRequests.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '16px' }}>
+                        暂无请求记录
+                      </td>
+                    </tr>
+                  )}
+                  {metrics &&
+                    metrics.recentRequests.map((log) => (
+                      <tr
+                        key={log.id}
+                        className={!log.success ? 'table-row--error' : undefined}
+                      >
+                        <td>
+                          <div className="time-cell">
+                            <strong>
+                              {new Date(log.timestamp).toLocaleTimeString('zh-CN', {
+                                hour12: false,
+                              })}
+                            </strong>
+                            <span>{formatRelativeTime(log.timestamp)}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="method-pill">{log.method}</span>
+                        </td>
+                        <td>
+                          <span
+                            className={`status-chip ${
+                              log.success ? 'status-chip--ok' : 'status-chip--fail'
+                            }`}
+                          >
+                            {log.status}
+                          </span>
+                        </td>
+                        <td>{formatLatency(log.latency)}</td>
+                        <td className="path-cell">{log.path}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         {testResult && (
           <section className="card test-card">
             <div className="test-card__header">
@@ -261,5 +466,43 @@ curl -X POST http://localhost:3000/api/config \
       </div>
     </main>
   );
+}
+
+function buildPath(
+  data: MetricsSeriesPoint[],
+  key: 'total' | 'failures',
+  width: number,
+  height: number
+) {
+  if (data.length === 0) return '';
+  const maxValue = Math.max(...data.map((point) => point[key]), 1);
+  const step = data.length > 1 ? width / (data.length - 1) : width;
+
+  return data
+    .map((point, index) => {
+      const x = index * step;
+      const scaledY = height - (point[key] / maxValue) * (height - 10);
+      const y = Number.isFinite(scaledY) ? scaledY : height;
+      return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+}
+
+function formatRelativeTime(timestamp: number) {
+  const diffSeconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
+  if (diffSeconds < 60) {
+    return `${diffSeconds}s 前`;
+  }
+  if (diffSeconds < 3600) {
+    return `${Math.floor(diffSeconds / 60)}m 前`;
+  }
+  return `${Math.floor(diffSeconds / 3600)}h 前`;
+}
+
+function formatLatency(latency: number) {
+  if (latency < 1) {
+    return `${latency.toFixed(2)}ms`;
+  }
+  return `${Math.round(latency)}ms`;
 }
 

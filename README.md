@@ -7,6 +7,7 @@
 - ✅ Echo API：支持 GET 和 POST 请求的回声接口
 - ⚙️ 可配置延迟：设置 API 响应的延迟时间
 - 🎲 可配置失败率：设置 API 返回 500 错误的概率
+- 📊 实时监控：内存记录请求日志，展示请求/失败趋势
 - 🎨 管理界面：友好的 Web 界面进行配置管理
 - 🧪 测试功能：在管理页面直接测试 Echo API
 
@@ -38,6 +39,10 @@ npm run dev
 - **GET /api/config** - 获取当前配置
 - **POST /api/config** - 更新配置
 
+### 监控数据 API
+
+- **GET /api/metrics** - 获取最近请求日志与统计信息（最近 5 分钟趋势、最近请求列表、1 分钟平均指标等）
+
 请求体示例：
 ```json
 {
@@ -66,6 +71,12 @@ curl -X POST http://localhost:3000/api/echo \
 curl -X POST http://localhost:3000/api/config \
   -H "Content-Type: application/json" \
   -d '{"delay": 2000, "failureRate": 30}'
+```
+
+### 查询请求日志/趋势
+
+```bash
+curl http://localhost:3000/api/metrics
 ```
 
 ## 技术栈
