@@ -120,3 +120,9 @@ export function getRequestMetrics(limit = 50): RequestMetricsPayload {
   };
 }
 
+export function resetRequestMetrics() {
+  logs.length = 0;
+  totalRequests = 0;
+  nextId = 1;
+}
+

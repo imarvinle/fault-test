@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Config {
   delay: number;
@@ -39,6 +39,7 @@ interface MetricsPayload {
 
 const CHART_WIDTH = 600;
 const CHART_HEIGHT = 140;
+const METRICS_REFRESH_INTERVAL = 5000;
 
 export default function Home() {
   const [config, setConfig] = useState<Config>({ delay: 0, failureRate: 0 });
@@ -48,34 +49,34 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricsPayload | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [resettingMetrics, setResettingMetrics] = useState(false);
 
   useEffect(() => {
     loadConfig();
   }, []);
 
-  useEffect(() => {
-    let active = true;
-
-    const loadMetrics = async () => {
-      try {
-        const response = await fetch('/api/metrics');
-        const data = await response.json();
-        if (active) {
-          setMetrics(data);
-        }
-      } catch (error) {
-        console.error('Failed to load metrics:', error);
+  const fetchMetrics = useCallback(async () => {
+    setMetricsLoading(true);
+    try {
+      const response = await fetch('/api/metrics');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch metrics: ${response.status}`);
       }
-    };
-
-    loadMetrics();
-    const interval = setInterval(loadMetrics, 4000);
-
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
+      const data = await response.json();
+      setMetrics(data);
+    } catch (error) {
+      console.error('Failed to load metrics:', error);
+    } finally {
+      setMetricsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, METRICS_REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [fetchMetrics]);
 
   const loadConfig = async () => {
     setLoading(true);
@@ -140,6 +141,24 @@ export default function Home() {
       }
     } catch (error) {
       setTestResult(`❌ 请求失败: ${error}`);
+    }
+  };
+
+  const handleResetMetrics = async () => {
+    const confirmed = window.confirm('确认清空当前采样记录与统计数据？');
+    if (!confirmed) return;
+    setResettingMetrics(true);
+    try {
+      const response = await fetch('/api/metrics/reset', { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('重置失败');
+      }
+      await fetchMetrics();
+    } catch (error) {
+      console.error('Failed to reset metrics:', error);
+      alert('重置失败，请稍后重试');
+    } finally {
+      setResettingMetrics(false);
     }
   };
 
@@ -324,30 +343,36 @@ curl -X POST http://localhost:3000/api/config \
             <div>
               <p className="eyebrow">Traffic Monitor</p>
               <h2>最近 5 分钟请求走势</h2>
+              {metricsLoading && <span className="metrics-hint">刷新中...</span>}
             </div>
-            <div className="metrics-grid">
-              <div className="stat-tile">
-                <span>1 分钟请求量</span>
-                <strong>{metrics?.stats.lastMinuteRequests ?? '—'}</strong>
-              </div>
-              <div className="stat-tile">
-                <span>1 分钟失败量</span>
-                <strong>{metrics?.stats.lastMinuteFailures ?? '—'}</strong>
-              </div>
-              <div className="stat-tile">
-                <span>失败率</span>
-                <strong>
-                  {metrics
-                    ? `${metrics.stats.lastMinuteFailureRate.toFixed(1)}%`
-                    : '—'}
-                </strong>
-              </div>
-              <div className="stat-tile">
-                <span>平均耗时</span>
-                <strong>
-                  {metrics ? `${Math.round(metrics.stats.averageLatencyMs)}ms` : '—'}
-                </strong>
-              </div>
+            <button
+              className="btn btn--ghost"
+              onClick={handleResetMetrics}
+              disabled={resettingMetrics}
+            >
+              {resettingMetrics ? '重置中...' : '重置采样'}
+            </button>
+          </div>
+          <div className="metrics-grid">
+            <div className="stat-tile">
+              <span>1 分钟请求量</span>
+              <strong>{metrics?.stats.lastMinuteRequests ?? '—'}</strong>
+            </div>
+            <div className="stat-tile">
+              <span>1 分钟失败量</span>
+              <strong>{metrics?.stats.lastMinuteFailures ?? '—'}</strong>
+            </div>
+            <div className="stat-tile">
+              <span>失败率</span>
+              <strong>
+                {metrics ? `${metrics.stats.lastMinuteFailureRate.toFixed(1)}%` : '—'}
+              </strong>
+            </div>
+            <div className="stat-tile">
+              <span>平均耗时</span>
+              <strong>
+                {metrics ? `${Math.round(metrics.stats.averageLatencyMs)}ms` : '—'}
+              </strong>
             </div>
           </div>
 
@@ -460,7 +485,7 @@ curl -X POST http://localhost:3000/api/config \
                   : '失败'}
               </span>
             </div>
-            <pre className="test-card__output">{testResult}</pre>
+            <pre className="test-card__output">{testResult ?? ''}</pre>
           </section>
         )}
       </div>

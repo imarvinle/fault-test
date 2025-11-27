@@ -42,6 +42,7 @@ npm run dev
 ### 监控数据 API
 
 - **GET /api/metrics** - 获取最近请求日志与统计信息（最近 5 分钟趋势、最近请求列表、1 分钟平均指标等）
+- **POST /api/metrics/reset** - 清空所有采样记录与统计数据
 
 请求体示例：
 ```json
@@ -77,6 +78,9 @@ curl -X POST http://localhost:3000/api/config \
 
 ```bash
 curl http://localhost:3000/api/metrics
+
+# 重置监控数据
+curl -X POST http://localhost:3000/api/metrics/reset
 ```
 
 ## 技术栈

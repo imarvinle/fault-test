@@ -213,8 +213,16 @@ body {
 
 .metrics-card__header {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 18px;
+}
+
+.metrics-hint {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .metrics-grid {
