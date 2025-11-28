@@ -262,29 +262,31 @@ body {
 }
 
 .chart-y-axis {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--text-muted);
   position: relative;
+  width: 56px;
+  height: 180px;
+  margin-top: 12px;
 }
 
 .chart-y-axis__label {
-  position: relative;
-  height: 32px;
+  position: absolute;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  transform: translateY(50%);
 }
 
 .chart-y-axis__label span {
-  position: absolute;
-  right: 6px;
-  top: -8px;
+  width: 28px;
+  text-align: right;
 }
 
 .chart-y-axis__line {
-  position: absolute;
-  left: 40px;
-  right: -12px;
+  flex: 1;
   border-top: 1px dashed rgba(15, 23, 42, 0.08);
 }
 

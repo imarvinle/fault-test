@@ -382,12 +382,13 @@ curl -X POST http://localhost:3000/api/config \
             <div className="chart-container">
               <div className="chart-y-axis">
                 {yTicks.map((tick) => (
-                  <div key={tick.value} className="chart-y-axis__label">
+                  <div
+                    key={tick.value}
+                    className="chart-y-axis__label"
+                    style={{ bottom: `${tick.position}%` }}
+                  >
                     <span>{tick.label}</span>
-                    <div
-                      className="chart-y-axis__line"
-                      style={{ top: `${tick.position}%` }}
-                    />
+                    <div className="chart-y-axis__line" />
                   </div>
                 ))}
               </div>
@@ -520,7 +521,11 @@ function buildPaths(
   height: number
 ) {
   if (data.length === 0) {
-    return { totalPath: '', failurePath: '', yTicks: [] as Array<{ value: number; label: string; position: number }> };
+    return {
+      totalPath: '',
+      failurePath: '',
+      yTicks: [] as Array<{ value: number; label: string; position: number }>,
+    };
   }
 
   const maxTotal = Math.max(...data.map((point) => point.total));
@@ -538,12 +543,17 @@ function buildPaths(
       })
       .join(' ');
 
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-    const value = Math.round(maxValue * ratio);
+  const roundedMax = Math.ceil(maxValue);
+  const tickCount = Math.min(Math.max(roundedMax + 1, 2), 6);
+  const tickStep = roundedMax / (tickCount - 1 || 1);
+
+  const denom = Math.max(1, tickStep * (tickCount - 1 || 1));
+  const yTicks = Array.from({ length: tickCount }, (_, idx) => {
+    const value = Math.round(idx * tickStep);
     return {
       value,
-      label: value.toString(),
-      position: ratio * 100,
+      label: `${value}`,
+      position: (value / denom) * 100,
     };
   });
 

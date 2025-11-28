@@ -167,7 +167,6 @@ export async function getRequestMetrics(
       | null;
     const totalRaw = result?.total ?? null;
     const failuresRaw = result?.failures ?? null;
-    console.log('[metrics] bucket', bucketKey, 'raw values', result);
     return {
       bucketStart: descriptor.timestamp,
       total: Number(totalRaw ?? 0),
